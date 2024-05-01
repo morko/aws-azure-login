@@ -16,6 +16,8 @@ import mkdirp from "mkdirp";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 
+let samlResponseFromRolePage: string | null = null;
+
 const debug = _debug("aws-azure-login");
 
 const WIDTH = 425;
@@ -397,6 +399,16 @@ const states = [
     },
   },
   {
+    name: "Role selection",
+    selector: `#saml_form > input[name=SAMLResponse]`,
+    async handler(
+      page: puppeteer.Page,
+    ): Promise<void> {
+      debug("We are in role selection se we can grab the SAMLResponse from there");
+      samlResponseFromRolePage = await page.$eval("#saml_form > input[name=SAMLResponse]", (el) => el.getAttribute("value"));
+    },
+  },
+  {
     name: "Remember me",
     selector: `#KmsiDescription`,
     async handler(
@@ -739,7 +751,8 @@ export const login = {
       const samlResponsePromise = new Promise((resolve) => {
         page.on("request", (req: HTTPRequest) => {
           const reqURL = req.url();
-          debug(`Request: ${url}`);
+          debug(`Request: ${reqURL}`);
+
           if (
             reqURL === AWS_SAML_ENDPOINT ||
             reqURL === AWS_GOV_SAML_ENDPOINT ||
@@ -827,6 +840,10 @@ export const login = {
                   rememberMe
                 ),
               ]);
+
+              if (samlResponseFromRolePage) {
+                samlResponseData = querystring.stringify({SAMLResponse: samlResponseFromRolePage});
+              }
 
               debug(`Finished state: ${state.name}`);
 
